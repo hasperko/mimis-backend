@@ -79,14 +79,14 @@ function doPlayersOverlap(player1, player2) {
 function spawnPlayers() {
     const players = [];
     let attemptCount = 0;
-    let i = 0;
+    let uid = 0;
     for (let i = 0; i < PLAYERS; i++) {
         if (attemptCount > 100) {
             console.error('Could not place all players without overlap after 100 attempts.');
             break;
         }
         let newPlayer = {
-            id: i++,
+            id: uid++,
             x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
             color: COLORS[Math.floor(Math.random() * COLORS.length)],

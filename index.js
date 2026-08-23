@@ -1,3 +1,8 @@
+const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
+
+const tiktokUsername = 'ojoeldivo_'; // Replace with your TikTok username
+const connection = new TikTokLiveConnection(tiktokUsername, {});
+
 const express = require('express');
 const app = express();
 const port = 3000;
@@ -13,6 +18,8 @@ const io = new Server(server, {
 
 const PLAYERS = 500;
 const PLAYER_SIZE = 50;
+
+const MAX_ATTEMPTS = 3; // Maximum attempts to place a player without overlap
 
 const COLORS = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#ffaa00', '#00ffff', '#ff00aa'];
 const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Julia', 'Kevin', 'Linda', 'Mike', 'Nina', 'Oscar', 'Paula', 'Quinn', 'Rachel', 'Steve', 'Tina'];
@@ -111,7 +118,33 @@ function spawnPlayers() {
     return players;
 }
 
-const players = spawnPlayers();
+const players = [];
+
+function createPlayer(uid, nickname) {
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        let newPlayer = {
+            id: uid,
+            x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
+            y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
+            color: COLORS[Math.floor(Math.random() * COLORS.length)],
+            name: nickname || NAMES[Math.floor(Math.random() * NAMES.length)],
+        };
+        let overlapFound = false;
+        for (const player of players) {
+            if (doPlayersOverlap(newPlayer, player)) {
+                overlapFound = true;
+                break;
+            }
+        } 
+        if (!overlapFound) {
+            players.push(newPlayer);
+            return;
+        }
+    }
+    console.error('Could not place player without overlap after 100 attempts.');
+}
+
+// const players = spawnPlayers();
 
 app.get('/players', (req, res) => {
   res.json(players);
@@ -124,6 +157,26 @@ app.get('/', (req, res) => {
 server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+connection.connect().then(state => {
+    console.log(`Connected to roomId ${state.roomId}`);
+}).catch(err => {
+    console.error('Failed to connect to TikTok live stream:', err);
+});
+
+
+connection.on(WebcastEvent.MEMBER, (data) => {
+    const nickname = data.user?.nickname;
+    const uid = data.user?.id;
+    console.log(uid);
+    if (nickname) {
+        console.log(`New member: ${nickname}`);
+        if(!players.some(player => player.id === uid)) {
+            createPlayer(uid, nickname);
+        }
+    }
+});
+
 
 io.on('connection', (socket) => {
     console.log(`A user connected: ${socket.id}`);

@@ -1,6 +1,6 @@
 const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
 
-const tiktokUsername = 'ojoeldivo_'; // Replace with your TikTok username
+const tiktokUsername = 'mamang17__'; // Replace with your TikTok username
 const connection = new TikTokLiveConnection(tiktokUsername, {});
 
 const express = require('express');
@@ -120,7 +120,7 @@ function spawnPlayers() {
 
 const players = [];
 
-function createPlayer(uid, nickname) {
+function createPlayer(uid, nickname, avatarUrl) {
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
         let newPlayer = {
             id: uid,
@@ -128,6 +128,7 @@ function createPlayer(uid, nickname) {
             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
             color: COLORS[Math.floor(Math.random() * COLORS.length)],
             name: nickname || NAMES[Math.floor(Math.random() * NAMES.length)],
+            url: avatarUrl
         };
         let overlapFound = false;
         for (const player of players) {
@@ -168,11 +169,12 @@ connection.connect().then(state => {
 connection.on(WebcastEvent.MEMBER, (data) => {
     const nickname = data.user?.nickname;
     const uid = data.user?.id;
-    console.log(uid);
+    const url = data.user?.avatarThumb.urlList[0];
+    console.log(data.user);
     if (nickname) {
         console.log(`New member: ${nickname}`);
         if(!players.some(player => player.id === uid)) {
-            createPlayer(uid, nickname);
+            createPlayer(uid, nickname, url);
         }
     }
 });

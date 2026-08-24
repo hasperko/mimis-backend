@@ -25,8 +25,8 @@ const COLORS = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#ffaa00'
 const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Julia', 'Kevin', 'Linda', 'Mike', 'Nina', 'Oscar', 'Paula', 'Quinn', 'Rachel', 'Steve', 'Tina'];
 const SUFFIXES = ['Jr.', 'Sr.', 'III', 'IV', 'V'];
 
-const WORLD_WIDTH = 4000; // Width of the world
-const WORLD_HEIGHT = 4000; // Height of the world
+const WORLD_WIDTH = 1800; // Width of the world
+const WORLD_HEIGHT = 1000; // Height of the world
 
 const CAMERA_SPEED = 5; // Speed of camera movement
 const CAMERA_BORDER = 100; // Distance from the edge of the canvas before the camera starts moving
@@ -131,6 +131,12 @@ function clearInactiveTimer(playerId) {
         player.inactiveTimer = 0;
     }
 }
+function scalePlayer(uid, scaleFactor) {
+    const player = players.find(p => p.id === uid);
+    if (player) {
+        player.scale += scaleFactor;
+    }
+}
 
 function createPlayer(uid, nickname, avatarUrl) {
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
@@ -138,6 +144,7 @@ function createPlayer(uid, nickname, avatarUrl) {
             id: uid,
             x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
+            scale: PLAYER_SIZE,
             color: COLORS[Math.floor(Math.random() * COLORS.length)],
             name: nickname || NAMES[Math.floor(Math.random() * NAMES.length)],
             url: avatarUrl,
@@ -199,42 +206,49 @@ connection.on(WebcastEvent.CHAT, (data) => {
     console.log(`Chat message from user ${uid}: ${data.user}`);
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 10); // Increase size by 10 units
     }
 });
 connection.on(WebcastEvent.GIFT, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 20); // Increase size by 20 units
     }
 });
 connection.on(WebcastEvent.LIKE, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 5); // Increase size by 5 units
     }
 });
 connection.on(WebcastEvent.SOCIAL, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 15); // Increase size by 15 units
     }
 });
 connection.on(WebcastEvent.ENVELOPE, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 25); // Increase size by 25 units
     }
 });
 connection.on(WebcastEvent.FOLLOW, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 30); // Increase size by 30 units
     }
 });
 connection.on(WebcastEvent.SHARE, (data) => {
     const uid = data.user?.id.toString();
     if (uid) {
         clearInactiveTimer(uid);
+        scalePlayer(uid, 35); // Increase size by 35 units
     }
 });
 

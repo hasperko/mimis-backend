@@ -26,14 +26,10 @@ const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Hei
 const SUFFIXES = ['Jr.', 'Sr.', 'III', 'IV', 'V'];
 
 const WORLD_WIDTH = 1800; // Width of the world
-const WORLD_HEIGHT = 1000; // Height of the world
+const WORLD_HEIGHT = 10000; // Height of the world
 
-const CAMERA_SPEED = 5; // Speed of camera movement
-const CAMERA_BORDER = 100; // Distance from the edge of the canvas before the camera starts moving
 
 const PADDING = 10; // Padding between players to prevent overlap
-const BACKGROUND_COLOR = '#83c7ff';
-const BORDER_COLOR = '#000000';
 const BORDER_WIDTH = 10;
 
 function updatePlayerPosition(player) {
@@ -69,11 +65,6 @@ function updatePlayerState(player) {
             delete player.asleepTimer;
         }
     }
-    // } else {
-    //     if(Math.random() < 0.0005) { // 0.05% chance to fall asleep
-    //         player.asleepTimer = 200; // Sleep for 200 frames (~3.3 seconds at 60fps)
-    //     }
-    // }
 }
 
 
@@ -257,6 +248,7 @@ connection.on(WebcastEvent.SHARE, (data) => {
 io.on('connection', (socket) => {
     console.log(`A user connected: ${socket.id}`);
     socket.emit('players', players);
+    socket.emit('worldDimensions', { width: WORLD_WIDTH, height: WORLD_HEIGHT });
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
     });

@@ -1,6 +1,6 @@
 const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
 
-const tiktokUsername = 'mamang17__'; // Replace with your TikTok username
+const tiktokUsername = 'busflow07'; // Replace with your TikTok username
 const connection = new TikTokLiveConnection(tiktokUsername, {});
 
 const express = require('express');
@@ -55,6 +55,8 @@ function updatePlayerPosition(player) {
 }
 
 function updatePlayerState(player) {
+    player.inactiveTimer++;
+
     if(player.showNameTimer !== undefined) {
         player.showNameTimer--;
         if(player.showNameTimer <= 0) {
@@ -66,11 +68,12 @@ function updatePlayerState(player) {
         if(player.asleepTimer <= 0) {
             delete player.asleepTimer;
         }
-    } else {
-        if(Math.random() < 0.0005) { // 0.05% chance to fall asleep
-            player.asleepTimer = 200; // Sleep for 200 frames (~3.3 seconds at 60fps)
-        }
     }
+    // } else {
+    //     if(Math.random() < 0.0005) { // 0.05% chance to fall asleep
+    //         player.asleepTimer = 200; // Sleep for 200 frames (~3.3 seconds at 60fps)
+    //     }
+    // }
 }
 
 
@@ -83,42 +86,51 @@ function doPlayersOverlap(player1, player2) {
     );
 }
 
-function spawnPlayers() {
-    const players = [];
-    let attemptCount = 0;
-    let uid = 0;
-    for (let i = 0; i < PLAYERS; i++) {
-        if (attemptCount > 100) {
-            console.error('Could not place all players without overlap after 100 attempts.');
-            break;
-        }
-        let newPlayer = {
-            id: uid++,
-            x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
-            y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
-            color: COLORS[Math.floor(Math.random() * COLORS.length)],
-            name: NAMES[Math.floor(Math.random() * NAMES.length)],
-        };
-        if (Math.random() < 0.5) { // 50% chance to have a suffix
-            newPlayer.suffix = SUFFIXES[Math.floor(Math.random() * SUFFIXES.length)];
-        }
-        let overlapFound = false;
-        for (const player of players) {
-            if (doPlayersOverlap(newPlayer, player)) {
-                i--;
-                attemptCount++;
-                overlapFound = true;
-                break;
-            }
-        } 
-        if (!overlapFound) {
-            players.push(newPlayer);
-        }
-    }
-    return players;
-}
+// function spawnPlayers() {
+//     const players = [];
+//     let attemptCount = 0;
+//     let uid = 0;
+//     for (let i = 0; i < PLAYERS; i++) {
+//         if (attemptCount > 100) {
+//             console.error('Could not place all players without overlap after 100 attempts.');
+//             break;
+//         }
+//         let newPlayer = {
+//             id: uid++,
+//             x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
+//             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
+//             color: COLORS[Math.floor(Math.random() * COLORS.length)],
+//             name: NAMES[Math.floor(Math.random() * NAMES.length)],
+//             inactiveTimer: 0,
+//         };
+//         if (Math.random() < 0.5) { // 50% chance to have a suffix
+//             newPlayer.suffix = SUFFIXES[Math.floor(Math.random() * SUFFIXES.length)];
+//         }
+//         let overlapFound = false;
+//         for (const player of players) {
+//             if (doPlayersOverlap(newPlayer, player)) {
+//                 i--;
+//                 attemptCount++;
+//                 overlapFound = true;
+//                 break;
+//             }
+//         } 
+//         if (!overlapFound) {
+//             players.push(newPlayer);
+//         }
+//     }
+//     return players;
+// }
 
-const players = [];
+let players = [];
+
+function clearInactiveTimer(playerId) {
+    const player = players.find(p => p.id === playerId);
+    if (player) {
+        console.log(`Resetting inactive timer for player ${playerId} (${player.name})`);
+        player.inactiveTimer = 0;
+    }
+}
 
 function createPlayer(uid, nickname, avatarUrl) {
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
@@ -128,7 +140,8 @@ function createPlayer(uid, nickname, avatarUrl) {
             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
             color: COLORS[Math.floor(Math.random() * COLORS.length)],
             name: nickname || NAMES[Math.floor(Math.random() * NAMES.length)],
-            url: avatarUrl
+            url: avatarUrl,
+            inactiveTimer: 0,
         };
         let overlapFound = false;
         for (const player of players) {
@@ -145,9 +158,11 @@ function createPlayer(uid, nickname, avatarUrl) {
     console.error('Could not place player without overlap after 100 attempts.');
 }
 
+
 // const players = spawnPlayers();
 
 app.get('/players', (req, res) => {
+    console.log('Sending players data:', players);
   res.json(players);
 });
 
@@ -168,9 +183,9 @@ connection.connect().then(state => {
 
 connection.on(WebcastEvent.MEMBER, (data) => {
     const nickname = data.user?.nickname;
-    const uid = data.user?.id;
+    const uid = data.user?.id.toString();
     const url = data.user?.avatarThumb.urlList[0];
-    console.log(data.user);
+    // console.log(data.user);
     if (nickname) {
         console.log(`New member: ${nickname}`);
         if(!players.some(player => player.id === uid)) {
@@ -178,6 +193,51 @@ connection.on(WebcastEvent.MEMBER, (data) => {
         }
     }
 });
+
+connection.on(WebcastEvent.CHAT, (data) => {
+    const uid = data.user?.id.toString();
+    console.log(`Chat message from user ${uid}: ${data.user}`);
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.GIFT, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.LIKE, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.SOCIAL, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.ENVELOPE, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.FOLLOW, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+connection.on(WebcastEvent.SHARE, (data) => {
+    const uid = data.user?.id.toString();
+    if (uid) {
+        clearInactiveTimer(uid);
+    }
+});
+
 
 
 io.on('connection', (socket) => {
@@ -200,5 +260,6 @@ setInterval(() => {
         updatePlayerPosition(player);
         updatePlayerState(player);
     });
+    players = players.filter(player => player.inactiveTimer <= 2000); // Remove players inactive for more than 10 seconds
     io.emit('players', players);
 }, 1000 / 30); // 30 times per second

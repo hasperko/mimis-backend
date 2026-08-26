@@ -3,7 +3,7 @@ const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
 
 const express = require('express');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -30,18 +30,22 @@ const WORLD_HEIGHT = 1000; // Height of the world
 const PADDING = 10; // Padding between players to prevent overlap
 const BORDER_WIDTH = 10;
 
-
-let players = [];
+const rooms = new Map(); // Map to store roomId and corresponding TikTokLiveConnection
 
 function startTikTokConnection(username, socket) {
-    players = []; // Reset players array when a new username is provided
-    const connection = new TikTokLiveConnection(username, {});
+    const room = { username: username, players: [], connection: null, connected: []}; // Store the username and associated data in the rooms map
+    rooms.set(username, room);
+    room.connected.push(socket);
+    room.connection = new TikTokLiveConnection(username, {});
+    const connection = room.connection;
 
     connection.connect().then(state => {
         console.log(`Connected to roomId ${state.roomId}`);
     }).catch(err => {
+        rooms.delete(username); // Remove the room from the map if connection fails
         socket.emit('tiktokError', 'Failed to connect to TikTok live stream. Please check the username and try again.');
         console.error('Failed to connect to TikTok live stream:', err);
+        return null;
     });
 
     connection.on(WebcastEvent.MEMBER, (data) => {
@@ -50,64 +54,63 @@ function startTikTokConnection(username, socket) {
         const url = data.user?.avatarThumb?.urlList?.[0];
         // console.log(data.user);
         if (nickname) {
-            console.log(`New member: ${nickname}`);
-            if(!players.some(player => player.id === uid)) {
-                createPlayer(uid, nickname, url);
+            if(!room.players.some(player => player.id === uid)) {
+                createPlayer(uid, nickname, url, room.players);
             }
         }
     });
 
     connection.on(WebcastEvent.CHAT, (data) => {
         const uid = data.user?.id?.toString();
-        console.log(`Chat message from user ${uid}: ${data.user}`);
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 10); // Increase size by 10 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 10, room.players); // Increase size by 10 units
         }
     });
     connection.on(WebcastEvent.GIFT, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 20); // Increase size by 20 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 20, room.players); // Increase size by 20 units
         }
     });
     connection.on(WebcastEvent.LIKE, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 5); // Increase size by 5 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 5, room.players); // Increase size by 5 units
         }
     });
     connection.on(WebcastEvent.SOCIAL, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 15); // Increase size by 15 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 15, room.players); // Increase size by 15 units
         }
     });
     connection.on(WebcastEvent.ENVELOPE, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 25); // Increase size by 25 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 25, room.players); // Increase size by 25 units
         }
     });
     connection.on(WebcastEvent.FOLLOW, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 30); // Increase size by 30 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 30, room.players); // Increase size by 30 units
         }
     });
     connection.on(WebcastEvent.SHARE, (data) => {
         const uid = data.user?.id?.toString();
         if (uid) {
-            clearInactiveTimer(uid);
-            scalePlayer(uid, 35); // Increase size by 35 units
+            clearInactiveTimer(uid, room.players);
+            scalePlayer(uid, 35, room.players); // Increase size by 35 units
         }
     });
-    return connection;
+
+    return room;
 }
 
 function updatePlayerPosition(player) {
@@ -155,57 +158,20 @@ function doPlayersOverlap(player1, player2) {
     );
 }
 
-// function spawnPlayers() {
-//     const players = [];
-//     let attemptCount = 0;
-//     let uid = 0;
-//     for (let i = 0; i < PLAYERS; i++) {
-//         if (attemptCount > 100) {
-//             console.error('Could not place all players without overlap after 100 attempts.');
-//             break;
-//         }
-//         let newPlayer = {
-//             id: uid++,
-//             x: Math.random() * (WORLD_WIDTH - PLAYER_SIZE),
-//             y: Math.random() * (WORLD_HEIGHT - PLAYER_SIZE),
-//             color: COLORS[Math.floor(Math.random() * COLORS.length)],
-//             name: NAMES[Math.floor(Math.random() * NAMES.length)],
-//             inactiveTimer: 0,
-//         };
-//         if (Math.random() < 0.5) { // 50% chance to have a suffix
-//             newPlayer.suffix = SUFFIXES[Math.floor(Math.random() * SUFFIXES.length)];
-//         }
-//         let overlapFound = false;
-//         for (const player of players) {
-//             if (doPlayersOverlap(newPlayer, player)) {
-//                 i--;
-//                 attemptCount++;
-//                 overlapFound = true;
-//                 break;
-//             }
-//         } 
-//         if (!overlapFound) {
-//             players.push(newPlayer);
-//         }
-//     }
-//     return players;
-// }
-
-function clearInactiveTimer(playerId) {
+function clearInactiveTimer(playerId, players) {
     const player = players.find(p => p.id === playerId);
     if (player) {
-        console.log(`Resetting inactive timer for player ${playerId} (${player.name})`);
         player.inactiveTimer = 0;
     }
 }
-function scalePlayer(uid, scaleFactor) {
+function scalePlayer(uid, scaleFactor, players) {
     const player = players.find(p => p.id === uid);
     if (player) {
         player.scale += scaleFactor;
     }
 }
 
-function createPlayer(uid, nickname, avatarUrl) {
+function createPlayer(uid, nickname, avatarUrl, players) {
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
         let newPlayer = {
             id: uid,
@@ -235,11 +201,6 @@ function createPlayer(uid, nickname, avatarUrl) {
 
 // const players = spawnPlayers();
 
-app.get('/players', (req, res) => {
-    console.log('Sending players data:', players);
-  res.json(players);
-});
-
 app.get('/', (req, res) => {
   res.send('Hello World!');
 });
@@ -248,23 +209,33 @@ server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
 
-let tiktokConnection = null;
 
 io.on('connection', (socket) => {
     console.log(`A user connected: ${socket.id}`);
-    socket.emit('players', players);
+    let room=null;
+    socket.on('tiktokUsername', (username) => {
+        console.log(`Received TikTok username: ${username}`);
+        room = rooms.get(username);
+        if(room) {
+            room.connected.push(socket);
+        } else {
+            room = startTikTokConnection(username, socket);
+        }
+    });
+    socket.emit('players', room ? room.players : []);
     socket.emit('worldDimensions', { width: WORLD_WIDTH, height: WORLD_HEIGHT });
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
-        tiktokConnection?.disconnect();
-        tiktokConnection = null;
-    });
-    socket.on('tiktokUsername', (username) => {
-        console.log(`Received TikTok username: ${username}`);
-        tiktokConnection = startTikTokConnection(username, socket);
+        if(room) {
+            room.connected = room.connected.filter(s => s !== socket);
+            if(room.connected.length <= 0) {
+                room.connection?.disconnect();
+                rooms.delete(room.username);
+            }
+        }
     });
     socket.on('showName', (playerId) => {
-        const player = players.find(p => p.id === playerId);
+        const player = room?.players.find(p => p.id === playerId);
         if (player) {
             player.showNameTimer = 60; // Show name for 60 frames (~1 second at 60fps)
         }
@@ -274,10 +245,23 @@ io.on('connection', (socket) => {
 
 
 setInterval(() => {
-    players.forEach(player => {
-        updatePlayerPosition(player);
-        updatePlayerState(player);
+    rooms.forEach((room, username) => {
+        room.players.forEach(player => {
+            updatePlayerPosition(player);
+            updatePlayerState(player);
+        });
+        room.players = room.players.filter(player => player.inactiveTimer <= 2000); // Remove players inactive for more than 10 seconds
+        room.connected.forEach(socket => {
+            socket.emit('players', room.players);
+        });
     });
-    players = players.filter(player => player.inactiveTimer <= 2000); // Remove players inactive for more than 10 seconds
-    io.emit('players', players);
 }, 1000 / 30); // 30 times per second
+
+// setInterval(() => {
+//     players.forEach(player => {
+//         updatePlayerPosition(player);
+//         updatePlayerState(player);
+//     });
+//     players = players.filter(player => player.inactiveTimer <= 2000); // Remove players inactive for more than 10 seconds
+//     io.emit('players', players);
+// }, 1000 / 30); // 30 times per second
